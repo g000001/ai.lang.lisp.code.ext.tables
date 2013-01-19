@@ -1,0 +1,83 @@
+* DEFTABLE
+
+===========================================================================
+Copyright 1992 by Sun Microsystems Inc. (Sun)
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby granted, 
+provided that this copyright and permission notice appear in all
+copies and supporting documentation.
+
+Sun makes no representations about the suitability of this software
+for any purpose.  It is provided "as is" without express or implied
+warranty.  Sun disclaims all warranties, including all implied
+warranties of merchantability and fitness. In no event shall Sun be
+liable for any special, indirect or consequential damages or any
+damages whatsoever resulting from loss of use, data or profits,
+whether in an action of contract, negligence or other tortious
+action, arising out of or in connection with the use or performance
+of this software.
+===========================================================================
+
+The DEFTABLE macro provides a concise, lightweight notation for defining
+tables: things you can put key/value pairs into, and retrieve the value
+from the key.  For example, after specifying:
+
+: (deftable state
+:    :init '((AL Alabama) (AK Alaska) ...))
+
+You can say (get-state 'AL) to get Alabama.  If the need ever arises, you 
+can add to the table with (put-state 'PR 'Puerto-Rico), or equivalenty,
+(setf (get-state 'PR) 'Puerto-Rico).  You can delete one or clear all
+entries, and you can use (map-state #'(lambda (abbrev name) ...)) to
+map a function over all entries.
+
+Finally, you can keep track of multiple tables of the same type.  For example,
+you could arrange to have a table for each country, so that:
+: (get-state 'AZ *USA*) ==> Arizona
+: (get-state 'AZ *CIS*) ==> Azerbaijan
+
+When it comes time to performance-tune your program, you can implement
+each table type as a hash table, property list, alist, or vector (if the keys
+are dense small integers), or define your own implementation.
+
+Note that if you evaluate two deftables with the same name, the table
+created for the first one will not be replaced (because the table is
+defined with defvar, not defparameter.  The default value and any initial
+values will take effect the second (and subsequent) times, however.
+
+See the article "DEFTABLE: A Macro for Implementing Tables"
+by Peter Norvig, to appear in  Lisp Pointers, for more details.
+
+: ;;;; Sample Expansion
+: 
+: (deftable state
+:    :init '((AL Alabama) (AK Alaska)))    ===>
+: 
+: (eval-when (:compile-toplevel :load-toplevel :execute)
+:   (defun new-state-table (&key (size 100) (test #'equal))
+:     "Create a new table."
+:     (make-hash-table :test test :size size))
+:   (defparameter *state-table-default* nil)
+:   (defvar *state-table* (new-state-table))
+:   (declaim (notinline new-state-table get-state put-state rem-state map-state))
+:   (defsetf get-state (key &optional (table '*state-table*)) (val)
+:     (list 'put-state key val table))
+:   (defun get-state (key &optional (table *state-table*))
+:     "Return 2 values: the val for this key and t, or the default and nil."
+:     (gethash key table *state-table-default*))
+:   (defun put-state (key val &optional (table *state-table*))
+:     "Store val as the value of key in the table."
+:     (setf (gethash key table) val))
+:   (defun rem-state (key &optional (table *state-table*))
+:     "Remove key and it's value from the table."
+:     (remhash key table))
+:   (defun clear-state (&optional (table *state-table*))
+:     "Remove all key/value pairs from the table."
+:     (clrhash table))
+:   (defun map-state (fn &optional (table *state-table*))
+:     "Apply fn to each key and value, in any order."
+:     (maphash fn table))
+:   (initialize-table *state-table* #'put-state '((al alabama) (ak alaska)))
+:   'state)
+
